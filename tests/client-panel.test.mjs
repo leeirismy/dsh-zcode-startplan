@@ -1176,12 +1176,16 @@ test('Panel surface=settings 时隐藏自带标题行', () => {
     return { Panel }
   `
   const mod = new Function('React', code)(FakeReact)
-  const hasHead = (node) =>
-    findAll(node, (n) => typeof n.props?.className === 'string' && n.props.className.split(' ').includes('zsp-head'))
-  /** settings 页：宿主自带标题，面板不重复画 zsp-head。 */
+  const hasClass = (node, cls) =>
+    findAll(node, (n) => typeof n.props?.className === 'string' && n.props.className.split(' ').includes(cls))
+  const hasRefresh = (node) =>
+    findAll(node, (n) => n.type === 'button' && (n.children || []).some((c) => c === '刷新'))
+  /** settings 页：宿主自带标题，面板不重复画 zsp-title，但必须保留手动刷新按钮。 */
   const settingsTree = resolve(mod.Panel({ surface: 'settings' }), FakeReact)
-  assert.equal(hasHead(settingsTree).length, 0, 'settings 页不应渲染自带 zsp-head')
-  /** 详情页（默认）：保持原有标题行。 */
+  assert.equal(hasClass(settingsTree, 'zsp-title').length, 0, 'settings 页不应重复渲染 zsp-title 标题')
+  assert.equal(hasRefresh(settingsTree).length, 1, 'settings 页必须保留手动「刷新」按钮')
+  /** 详情页（默认）：标题行与刷新按钮都在。 */
   const detailTree = resolve(mod.Panel({}), FakeReact)
-  assert.equal(hasHead(detailTree).length, 1, '详情页默认仍渲染自带标题行')
+  assert.equal(hasClass(detailTree, 'zsp-title').length, 1, '详情页默认仍渲染标题')
+  assert.equal(hasRefresh(detailTree).length, 1, '详情页必须保留手动「刷新」按钮')
 })

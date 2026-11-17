@@ -2274,8 +2274,10 @@ window.__ModuleLoader__.load({
       const unifiedVisible = data?.unifiedModelList !== false
       /**
        * 设置页外壳（1.0.4）：宿主的 settings.section 自带标题与关闭钮，
-       * 面板不再画自己的 `zsp-head`（否则两层标题叠在一起）。
-       * 详情页（默认，surface 未传）行为不变。
+       * 面板不再画自己的 `zsp-title`（否则两层标题叠在一起）——
+       * 但**手动「刷新」按钮必须保留**：设置页没有详情页那套宿主级刷新，
+       * 去掉它账号池数据就再也刷不动了（1.0.4 回归）。
+       * 详情页（默认，surface 未传）行为不变，仍画完整标题行。
        */
       const embeddedSettings = (props || {}).surface === 'settings'
 
@@ -2283,22 +2285,22 @@ window.__ModuleLoader__.load({
         'section',
         { className: 'zsp-panel' },
         h('style', null, CSS),
-        embeddedSettings
-          ? null
-          : h(
-            'div',
-            { className: 'zsp-head' },
-            h('h3', { className: 'zsp-title' }, '账号池管理'),
-            data !== undefined
-              ? h(
-                  'span',
-                  { className: 'zsp-muted' },
-                  `${[data.displayName ?? data.provider, `${accounts.length} 个账号`].filter(Boolean).join(' · ')}`,
-                )
-              : null,
-            h('span', { className: 'zsp-spacer' }),
-            h('button', { className: 'zsp-btn', onClick: () => void load(), disabled: busy }, '刷新'),
-          ),
+        h(
+          'div',
+          { className: 'zsp-head' },
+          embeddedSettings
+            ? null
+            : h('h3', { className: 'zsp-title' }, '账号池管理'),
+          !embeddedSettings && data !== undefined
+            ? h(
+                'span',
+                { className: 'zsp-muted' },
+                `${[data.displayName ?? data.provider, `${accounts.length} 个账号`].filter(Boolean).join(' · ')}`,
+              )
+            : null,
+          h('span', { className: 'zsp-spacer' }),
+          h('button', { className: 'zsp-btn', onClick: () => void load(), disabled: busy }, '刷新'),
+        ),
         /**
          * 池子总额度（0.9.3）：汇总所有账号的余额桶，置顶一行。
          * 数据来自懒加载的 balances —— 未加载完的账号不计入（下方注明）。
