@@ -947,7 +947,8 @@ test('RouteBadge 插槽：只能注册到 composer 里**已声明**的槽', () =
   for (const token of injected) {
     const name = literal(token)
     assert.ok(
-      DECLARED_COMPOSER_SLOTS.has(name) || name === 'plugins.bundle.config',
+      DECLARED_COMPOSER_SLOTS.has(name) || name === 'plugins.bundle.config'
+        || name === 'settings.section' || name === 'settings.section.icon',
       `插槽 ${name} 未在宿主 composer 注册表里声明 —— 向它注册会让整个 bundle 的 apply 抛错`,
     )
     assert.notEqual(name, 'conversation.input.model.label', '0.9.9 事故座位：只被 renderSlot 调用，从未声明')
@@ -955,6 +956,19 @@ test('RouteBadge 插槽：只能注册到 composer 里**已声明**的槽', () =
 
   /** 徽标必须落在模型座旁边的那一格。 */
   assert.match(SOURCE, /conversation\.input\.right/, '徽标座位必须是 conversation.input.right')
+})
+
+test('settings.section 双注册：icon 嵌套在 section 回调内且被 guardContribution 包裹', () => {
+  assert.match(SOURCE, /slots\.inject\('settings\.section'/, '缺 settings.section 注册')
+  assert.match(SOURCE, /slots\.inject\('settings\.section\.icon'/, '缺 settings.section.icon 注册')
+  /** icon 的 inject 必须出现在 section 回调体内（防孤儿注册，workbuddy 契约）。 */
+  const sectionIdx = SOURCE.indexOf("slots.inject('settings.section'")
+  const iconIdx = SOURCE.indexOf("slots.inject('settings.section.icon'")
+  assert.ok(iconIdx > sectionIdx, 'icon 注册必须在 section 回调之后（嵌套）')
+  assert.match(SOURCE, /id:\s*'zcode-start-plan-settings'/, 'section id 必须固定为 zcode-start-plan-settings')
+  assert.match(SOURCE, /surface:\s*'settings'/, 'Panel 注入必须携带 surface')
+  /** settings.section 与 icon 两个注册必须在同一个 guardContribution 保护下（0.9.9 事故契约）。 */
+  assert.match(SOURCE, /guardContribution\('settings section'/, 'settings.section 注册必须被 guardContribution 包裹')
 })
 
 function buildRouteBadge() {
@@ -1138,4 +1152,36 @@ test('RouteBadge 注册：modelDirectories 走延迟注入 + 每次贡献都有 
   assert.notEqual(injectCallback, null, '找不到 slot 注册的 inject 回调')
   assert.match(injectCallback[1], /try\s*\{/, 'inject 回调体必须是 try 包裹的')
   assert.match(injectCallback[1], /return \{\}/, '失败时返回空 props 而不是抛出')
+})
+test('Panel surface=settings 时隐藏自带标题行', () => {
+  const code = `
+    const h = React.createElement
+    const Fragment = React.Fragment
+    const { useState, useCallback, useEffect, useRef } = React
+    const API = '/api/zcode-start-plan'
+    const api = async () => ({ ok: true, accounts: [] })
+    const CSS = '/* stub */'
+    function ChannelSelect(props) { return h('span', null, props.value ?? '') }
+    function NicknameEdit(props) { return h('span', null, props.nickname) }
+    function Toggle() { return h('input', { type: 'checkbox' }) }
+    ${extractFunction('formatReset')}
+    ${extractFunction('QuotaMeter')}
+    ${extractFunction('AccountCard')}
+    ${extractFunction('TotalQuota')}
+    ${extractFunction('AddAccountSection')}
+    ${extractFunction('OpenAiGatewaySection')}
+    ${extractFunction('DistributionKeysSection')}
+    ${extractFunction('ClaimSection')}
+    ${extractFunction('Panel')}
+    return { Panel }
+  `
+  const mod = new Function('React', code)(FakeReact)
+  const hasHead = (node) =>
+    findAll(node, (n) => typeof n.props?.className === 'string' && n.props.className.split(' ').includes('zsp-head'))
+  /** settings 页：宿主自带标题，面板不重复画 zsp-head。 */
+  const settingsTree = resolve(mod.Panel({ surface: 'settings' }), FakeReact)
+  assert.equal(hasHead(settingsTree).length, 0, 'settings 页不应渲染自带 zsp-head')
+  /** 详情页（默认）：保持原有标题行。 */
+  const detailTree = resolve(mod.Panel({}), FakeReact)
+  assert.equal(hasHead(detailTree).length, 1, '详情页默认仍渲染自带标题行')
 })

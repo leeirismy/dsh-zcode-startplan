@@ -2272,25 +2272,33 @@ window.__ModuleLoader__.load({
       const accounts = data !== undefined && Array.isArray(data.accounts) ? data.accounts : undefined
       /** 统一选号栏位当前是否显示（关掉 = 模型列表只留每账号一栏）。 */
       const unifiedVisible = data?.unifiedModelList !== false
+      /**
+       * 设置页外壳（1.0.4）：宿主的 settings.section 自带标题与关闭钮，
+       * 面板不再画自己的 `zsp-head`（否则两层标题叠在一起）。
+       * 详情页（默认，surface 未传）行为不变。
+       */
+      const embeddedSettings = (props || {}).surface === 'settings'
 
       return h(
         'section',
         { className: 'zsp-panel' },
         h('style', null, CSS),
-        h(
-          'div',
-          { className: 'zsp-head' },
-          h('h3', { className: 'zsp-title' }, '账号池管理'),
-          data !== undefined
-            ? h(
-                'span',
-                { className: 'zsp-muted' },
-                `${[data.displayName ?? data.provider, `${accounts.length} 个账号`].filter(Boolean).join(' · ')}`,
-              )
-            : null,
-          h('span', { className: 'zsp-spacer' }),
-          h('button', { className: 'zsp-btn', onClick: () => void load(), disabled: busy }, '刷新'),
-        ),
+        embeddedSettings
+          ? null
+          : h(
+            'div',
+            { className: 'zsp-head' },
+            h('h3', { className: 'zsp-title' }, '账号池管理'),
+            data !== undefined
+              ? h(
+                  'span',
+                  { className: 'zsp-muted' },
+                  `${[data.displayName ?? data.provider, `${accounts.length} 个账号`].filter(Boolean).join(' · ')}`,
+                )
+              : null,
+            h('span', { className: 'zsp-spacer' }),
+            h('button', { className: 'zsp-btn', onClick: () => void load(), disabled: busy }, '刷新'),
+          ),
         /**
          * 池子总额度（0.9.3）：汇总所有账号的余额桶，置顶一行。
          * 数据来自懒加载的 balances —— 未加载完的账号不计入（下方注明）。
@@ -2380,6 +2388,34 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /** 设置页导航图标：内联渲染 icon.svg 的图形（64×64 viewBox，宿主给 16px 边）。 */
+    function SettingsNavIcon(props) {
+      const size = typeof props?.size === 'number' ? props.size : 16
+      return h(
+        'svg',
+        {
+          viewBox: '0 0 64 64',
+          width: size,
+          height: size,
+          'aria-hidden': true,
+          style: { display: 'block', borderRadius: '4px', opacity: props?.active === false ? 0.75 : 1 },
+        },
+        h('defs', null, h('linearGradient', { id: 'zsp-nav-g', x1: 0, y1: 0, x2: 1, y2: 1 },
+          h('stop', { offset: '0', 'stop-color': '#3B82F6' }),
+          h('stop', { offset: '1', 'stop-color': '#8B5CF6' }))),
+        h('rect', { x: 4, y: 4, width: 56, height: 56, rx: 14, fill: 'url(#zsp-nav-g)' }),
+        h('path', {
+          d: 'M19 19 H45 L19 45 H45', fill: 'none', stroke: '#fff', 'stroke-width': 6,
+          'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+        }),
+        h('circle', { cx: 47, cy: 17, r: 5, fill: '#fff', opacity: 0.9 }),
+        h('path', {
+          d: 'M15 50 L19 54 L26 47', fill: 'none', stroke: '#fff', 'stroke-width': 3.5,
+          'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: 0.75,
+        }),
+      )
+    }
+
     return {
       /**
        * ⚠ 只有**必须**的服务才进硬 inject：硬 inject 里缺一个，整个 fiber 挂起、
@@ -2392,6 +2428,40 @@ window.__ModuleLoader__.load({
           /** key = 包名：宿主只在 dsh-zcode-startplan 的详情页派发本条目。 */
           ctx.slots.register({ name: SLOT, key: BUNDLE_KEY }, Panel),
         )
+        /**
+         * 设置面板左侧导航入口（1.0.4，workbuddy / codex-subscription 同款契约）。
+         *
+         * ⚠ icon 必须在 section 的 inject 回调**内部**注册：
+         * `settings.section.icon` 由宿主 `renderSlot(..., { only: row.id })` 渲染，
+         * 只有 section 的 id 已存在时才有意义；且旧宿主缺 `settings.section` 槽时
+         * `ctx.slots.inject` 永不回调（不抛错、不排队），icon 若在外层就成了
+         * 永不清理的孤儿。槽缺席时让宿主回答——这里什么都不发生。
+         */
+        guardContribution('settings section', () => {
+          ctx.slots.inject('settings.section', () => {
+            const disposers = []
+            disposers.push(ctx.slots.register({
+              name: 'settings.section',
+              id: 'zcode-start-plan-settings',
+              order: 40,
+              label: () => 'ZCode Start Plan',
+              inject: () => ({ surface: 'settings' }),
+            }, Panel))
+            guardContribution('settings section icon', () => {
+              disposers.push(ctx.slots.inject('settings.section.icon', () =>
+                ctx.slots.register({
+                  name: 'settings.section.icon',
+                  id: 'zcode-start-plan-settings',
+                }, SettingsNavIcon),
+              ) ?? NOOP_DISPOSER)
+            })
+            return () => {
+              for (const dispose of disposers) {
+                try { dispose() } catch { /* 清理失败不影响其他条目 */ }
+              }
+            }
+          })
+        })
         /**
          * 模型栏旁的「当前使用账号」（1.0.0）。
          *
