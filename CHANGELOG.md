@@ -3,6 +3,20 @@
 本文件记录**每次修复背后的宿主契约**。只看 diff 看不出「为什么不能改回去」，
 所以把约束与症状一起写下来。
 
+## 1.0.4 — 设置页入口
+
+### 新增
+- 「设置」左侧栏出现「ZCode Start Plan」入口（`settings.section` + `settings.section.icon`，
+  workbuddy / codex-subscription 同款契约）；点开与插件详情页共用同一账号池管理面板。
+- `Panel` 新增可选 `surface` prop：设置页宿主自带标题，隐藏面板自带 `zsp-head`。
+
+### 约束（改回去会怎样）
+| 约束 | 原因 |
+|---|---|
+| icon 必须嵌套在 `settings.section` 的 inject 回调内注册 | 旧宿主缺 `settings.section` 槽时外层 icon 注册会变成孤儿；嵌套后两者同生共死 |
+| 注册必须包 `guardContribution` | 任何一次 slots.register 抛错都会打断整个 client bundle 的 apply（0.9.9 事故） |
+| `surface` 是可选 prop | 同一 Panel 复用于详情页；老调用点不传时行为不变 |
+
 ## 未发布 — issue #6 的三个真实缺陷：imageRequestTarget / probe 误报 / last_error 不清
 
 issue #6（0.2.2-rc.3 全链路核对）确认的三个**与宿主版本无关**的缺陷，
